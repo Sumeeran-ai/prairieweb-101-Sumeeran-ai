@@ -63,15 +63,24 @@
     return true;
   }
 
+  // Keep fast keystrokes cheap: re-check at most once per 300 ms.
+  const debounce = (fn, wait) => {
+    let timer;
+    return (...args) => {
+      clearTimeout(timer);
+      timer = setTimeout(() => fn(...args), wait);
+    };
+  };
+
   // Validate on blur; re-check while typing once a field is flagged.
   fields.forEach((field) => {
     field.input.addEventListener('blur', () => validate(field));
-    field.input.addEventListener('input', () => {
+    field.input.addEventListener('input', debounce(() => {
       if (field.input.getAttribute('aria-invalid') === 'true') validate(field);
       if (field.input === messageField && counter) {
         counter.textContent = `${field.input.value.length} / ${MAX_LEN}`;
       }
-    });
+    }, 300));
   });
 
   form.addEventListener('submit', (event) => {
@@ -84,6 +93,9 @@
     }
 
     // textContent only — user input is never injected as HTML.
+    const data = Object.fromEntries(new FormData(form).entries());
+    console.log(JSON.stringify(data, null, 2));
+
     const name = document.getElementById('name').value.trim();
     successBox.textContent = '';
     const heading = document.createElement('p');
