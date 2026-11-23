@@ -113,3 +113,48 @@
     if (counter) counter.textContent = `0 / ${MAX_LEN}`;
   });
 })();
+
+// Live trail weather — Open-Meteo, no API key (Part 3, rubric 5.2).
+const TRAILS = {
+  louise: { lat: 51.425, lon: -116.177, label: 'Lake Louise Lakeshore' },
+  johnston: { lat: 51.245, lon: -115.842, label: 'Johnston Canyon' },
+  ptarmigan: { lat: 50.618, lon: -114.99, label: 'Ptarmigan Cirque' },
+};
+
+const WEATHER_WORDS = { 0: 'Clear', 1: 'Mainly clear', 2: 'Partly cloudy', 3: 'Overcast', 45: 'Foggy', 48: 'Foggy', 51: 'Light drizzle', 53: 'Drizzle', 55: 'Drizzle', 61: 'Light rain', 63: 'Rain', 65: 'Heavy rain', 71: 'Light snow', 73: 'Snow', 75: 'Heavy snow', 80: 'Light showers', 81: 'Showers', 82: 'Heavy showers', 95: 'Thunderstorm' };
+
+async function loadTrailWeather() {
+  const cached = JSON.parse(sessionStorage.getItem('trailWeather') || 'null');
+  if (cached && Date.now() - cached.at < 30 * 60 * 1000) return renderWeather(cached.data);
+
+  const out = {};
+  for (const [key, t] of Object.entries(TRAILS)) {
+    const el = document.querySelector(`[data-weather="${key}"]`);
+    try {
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 8000);
+      const res = await fetch(
+        `https://api.open-meteo.com/v1/forecast?latitude=${t.lat}&longitude=${t.lon}&current=temperature_2m,weather_code,wind_speed_10m`,
+        { signal: ctrl.signal }
+      );
+      clearTimeout(timer);
+      if (!res.ok) throw new Error('bad response');
+      const json = await res.json();
+      out[key] = json.current;
+    } catch {
+      if (el) el.textContent = 'Trail weather unavailable right now — check before you go.';
+    }
+  }
+  sessionStorage.setItem('trailWeather', JSON.stringify({ at: Date.now(), data: out }));
+  renderWeather(out);
+}
+
+function renderWeather(data) {
+  for (const [key, c] of Object.entries(data)) {
+    const el = document.querySelector(`[data-weather="${key}"]`);
+    if (!el || !c) continue;
+    el.textContent = `${WEATHER_WORDS[c.weather_code] ?? 'Conditions'}: ${Math.round(c.temperature_2m)}°C, wind ${Math.round(c.wind_speed_10m)} km/h`;
+  }
+}
+
+document.addEventListener('DOMContentLoaded', loadTrailWeather);
