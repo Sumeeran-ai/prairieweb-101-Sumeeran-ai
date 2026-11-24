@@ -1,3 +1,31 @@
+// Deployment monitoring (Part 4, rubric 9.2): keep a small client-side error
+// log in localStorage so errors after deployment can be inspected in DevTools
+// (Application > Local Storage > trailErrorLog). Keeps the newest 20 entries.
+(function installErrorLog() {
+  function record(type, message) {
+    try {
+      const log = JSON.parse(localStorage.getItem('trailErrorLog') || '[]');
+      log.push({ at: new Date().toISOString(), type, message: String(message).slice(0, 200) });
+      localStorage.setItem('trailErrorLog', JSON.stringify(log.slice(-20)));
+    } catch { /* storage unavailable — nothing to log to */ }
+  }
+  window.addEventListener('error', (event) => record('error', event.message));
+  window.addEventListener('unhandledrejection', (event) => record('rejection', event.reason));
+})();
+
+// Load the Fraunces display font without blocking render (Part 4, rubric 8.1).
+// The old inline onload="this.media='all'" handler was blocked by our own CSP
+// (script-src 'self'), so the font never applied and headings fell back to
+// Georgia. Loading it from script keeps it async and CSP-clean.
+(function loadDisplayFont() {
+  const link = document.createElement('link');
+  link.rel = 'stylesheet';
+  link.href = 'https://fonts.googleapis.com/css2?family=Fraunces:wght@600;700&display=swap';
+  link.media = 'print';
+  link.addEventListener('load', () => { link.media = 'all'; });
+  document.head.appendChild(link);
+})();
+
 // Contact form validation — inline errors, no page reload.
 (function () {
   const form = document.querySelector('.form');
@@ -96,7 +124,7 @@
     const data = Object.fromEntries(new FormData(form).entries());
     console.log(JSON.stringify(data, null, 2));
 
-    const name = document.getElementById('name').value.trim();
+    const name = fields[0].input.value.trim();
     successBox.textContent = '';
     const heading = document.createElement('p');
     heading.className = 'form__success-title';
@@ -123,12 +151,30 @@ const TRAILS = {
 
 const WEATHER_WORDS = { 0: 'Clear', 1: 'Mainly clear', 2: 'Partly cloudy', 3: 'Overcast', 45: 'Foggy', 48: 'Foggy', 51: 'Light drizzle', 53: 'Drizzle', 55: 'Drizzle', 61: 'Light rain', 63: 'Rain', 65: 'Heavy rain', 71: 'Light snow', 73: 'Snow', 75: 'Heavy snow', 80: 'Light showers', 81: 'Showers', 82: 'Heavy showers', 95: 'Thunderstorm' };
 
+// Storage can be blocked (private mode / disabled cookies), so a bare
+// sessionStorage call would throw and kill the weather load (Part 4, 8.2).
+function readWeatherCache() {
+  try {
+    const cached = JSON.parse(sessionStorage.getItem('trailWeather') || 'null');
+    if (cached && Date.now() - cached.at < 30 * 60 * 1000) return cached;
+  } catch { /* storage unavailable — fetch fresh */ }
+  return null;
+}
+
+function writeWeatherCache(data) {
+  try {
+    sessionStorage.setItem('trailWeather', JSON.stringify({ at: Date.now(), data }));
+  } catch { /* storage unavailable — weather still renders */ }
+}
+
 async function loadTrailWeather() {
-  const cached = JSON.parse(sessionStorage.getItem('trailWeather') || 'null');
-  if (cached && Date.now() - cached.at < 30 * 60 * 1000) return renderWeather(cached.data);
+  const cached = readWeatherCache();
+  if (cached) return renderWeather(cached.data);
 
   const out = {};
-  for (const [key, t] of Object.entries(TRAILS)) {
+  // Fetch all three trailheads in parallel instead of one after another
+  // (Part 4, rubric 8.2: optimise the loop).
+  const jobs = Object.entries(TRAILS).map(async ([key, t]) => {
     const el = document.querySelector(`[data-weather="${key}"]`);
     try {
       const ctrl = new AbortController();
@@ -144,8 +190,9 @@ async function loadTrailWeather() {
     } catch {
       if (el) el.textContent = 'Trail weather unavailable right now — check before you go.';
     }
-  }
-  sessionStorage.setItem('trailWeather', JSON.stringify({ at: Date.now(), data: out }));
+  });
+  await Promise.all(jobs);
+  writeWeatherCache(out);
   renderWeather(out);
 }
 
