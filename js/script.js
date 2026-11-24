@@ -156,7 +156,7 @@ const WEATHER_WORDS = { 0: 'Clear', 1: 'Mainly clear', 2: 'Partly cloudy', 3: 'O
 function readWeatherCache() {
   try {
     const cached = JSON.parse(sessionStorage.getItem('trailWeather') || 'null');
-    if (cached && Date.now() - cached.at < 30 * 60 * 1000) return cached;
+    if (cached && cached.data && Object.keys(cached.data).length && Date.now() - cached.at < 30 * 60 * 1000) return cached;
   } catch { /* storage unavailable — fetch fresh */ }
   return null;
 }
@@ -168,8 +168,10 @@ function writeWeatherCache(data) {
 }
 
 async function loadTrailWeather() {
+  // Show any cached weather instantly, then always fetch fresh data below,
+  // so a card that failed before is retried instead of staying stuck.
   const cached = readWeatherCache();
-  if (cached) return renderWeather(cached.data);
+  if (cached) renderWeather(cached.data);
 
   const out = {};
   // Fetch all three trailheads in parallel instead of one after another
@@ -188,11 +190,15 @@ async function loadTrailWeather() {
       const json = await res.json();
       out[key] = json.current;
     } catch {
-      if (el) el.textContent = 'Trail weather unavailable right now — check before you go.';
+      // Only show "unavailable" when nothing is displayed yet — a cached
+      // value from an earlier load stays visible instead of being wiped.
+      if (el && el.textContent.startsWith('Loading')) el.textContent = 'Trail weather unavailable right now — check before you go.';
     }
   });
   await Promise.all(jobs);
-  writeWeatherCache(out);
+  // Never cache an empty result: one failed fetch used to poison the
+  // weather for 30 minutes (the empty cache made every reload stop here).
+  if (Object.keys(out).length) writeWeatherCache(out);
   renderWeather(out);
 }
 

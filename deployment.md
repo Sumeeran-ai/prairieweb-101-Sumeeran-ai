@@ -7,6 +7,13 @@ database, and the code already lives in a GitHub repo. No API keys exist
 (Open-Meteo is keyless), so there are no environment variables or secrets to
 configure — nothing secret is committed to the repo.
 
+Note: the repo was private at first, and the Pages settings page refused to
+enable it ("Upgrade or make this repository public to enable Pages"). GitHub
+Pages on a free account only works for public repos, so the repo was made
+public on 24 Nov 2026 (Settings → General → Danger Zone → Change repository
+visibility). Nothing secret is in the repo, so making it public is safe — and
+the instructor can now view it without the collaborator invite.
+
 ## Steps (repeatable)
 
 1. Push the Part 4 branch to `main` (pull request + squash-merge, as in
@@ -34,7 +41,7 @@ Live URL: `https://sumeeran-ai.github.io/prairieweb-101-Sumeeran-ai/`
 ## Build files
 
 The live build references the readable files with cache-busting versions:
-`css/styles.css?v=20261123` and `js/script.js?v=20261123`. Bump the version
+`css/styles.css?v=20261124` and `js/script.js?v=20261124`. Bump the version
 on every deploy so returning visitors get the new files. The stale Part 3
 minified files (`styles.min.css`, `script.min.js`) were removed from the repo
 because the live build never used them and they were out of date after the
